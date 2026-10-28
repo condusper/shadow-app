@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shadow-app-v3';
+const CACHE_NAME = 'shadow-app-v4';
 
 const APP_SHELL = [
     './',

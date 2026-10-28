@@ -321,8 +321,16 @@ textarea:focus-visible,
     gap: 12px;
 }
 
+.library-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .library-card {
     width: 100%;
+    flex: 1;
+    min-width: 0;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -346,6 +354,44 @@ textarea:focus-visible,
 
 .library-card:hover {
     box-shadow: var(--shadow);
+}
+
+.library-delete {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color var(--transition), background var(--transition), border-color var(--transition), transform var(--transition);
+    font-family: inherit;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.library-delete:hover {
+    color: #FF3B30;
+    border-color: rgba(255, 59, 48, 0.35);
+    background: rgba(255, 59, 48, 0.08);
+}
+
+.library-delete:active {
+    transform: scale(0.94);
+    color: #FF3B30;
+}
+
+@media (prefers-color-scheme: dark) {
+    .library-delete:hover,
+    .library-delete:active {
+        color: #FF453A;
+        border-color: rgba(255, 69, 58, 0.4);
+        background: rgba(255, 69, 58, 0.12);
+    }
 }
 
 .library-thumb {

@@ -570,10 +570,12 @@ async function refreshLibrary() {
     const attempts = await getAllAttempts();
 
     const practiced = new Map();
+    const attemptCounts = new Map();
     for (const attempt of attempts) {
         if (!attempt.videoId) continue;
         if (!practiced.has(attempt.videoId)) practiced.set(attempt.videoId, new Set());
         practiced.get(attempt.videoId).add(attempt.sentenceId);
+        attemptCounts.set(attempt.videoId, (attemptCounts.get(attempt.videoId) || 0) + 1);
     }
 
     list.innerHTML = '';
@@ -587,6 +589,10 @@ async function refreshLibrary() {
 
     for (const video of videos) {
         const sentences = await getSentences(video.id);
+        const displayTitle = video.title || video.filename || 'Untitled';
+        const item = document.createElement('div');
+        item.className = 'library-item';
+
         const card = document.createElement('button');
         card.className = 'library-card';
         card.type = 'button';
@@ -612,7 +618,7 @@ async function refreshLibrary() {
         info.className = 'library-info';
         const title = document.createElement('div');
         title.className = 'library-title';
-        title.textContent = video.title || video.filename || 'Untitled';
+        title.textContent = displayTitle;
         const meta = document.createElement('div');
         meta.className = 'library-meta';
         const total = sentences.length;
@@ -640,14 +646,73 @@ async function refreshLibrary() {
 
         card.addEventListener('click', () => {
             if (!(video.blob instanceof Blob)) {
-                showToast('This library item was imported by an older build; its file is gone. Delete it and import again.', 5000);
+                showToast('This library item was imported by an older build; its file is gone. Use the trash button to remove it.', 5000);
                 return;
             }
             openShadowFor(video.id);
         });
 
-        list.appendChild(card);
+        const remove = document.createElement('button');
+        remove.className = 'library-delete';
+        remove.type = 'button';
+        remove.title = 'Delete';
+        remove.setAttribute('aria-label', `Delete “${displayTitle}” from library`);
+        remove.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>';
+        remove.addEventListener('click', (event) => {
+            event.stopPropagation();
+            deleteLibraryVideo(video, attemptCounts.get(video.id) || 0);
+        });
+
+        item.appendChild(card);
+        item.appendChild(remove);
+        list.appendChild(item);
     }
+}
+
+async function deleteLibraryVideo(video, attemptCount) {
+    const displayTitle = video.title || video.filename || 'this item';
+    const removes = ['the media file', 'its transcript', 'its sentences'];
+    if (attemptCount > 0) {
+        removes.push(`${attemptCount} recording${attemptCount === 1 ? '' : 's'}`);
+    }
+    const removeList = removes.length > 1
+        ? `${removes.slice(0, -1).join(', ')} and ${removes[removes.length - 1]}`
+        : removes[0];
+    const confirmed = window.confirm(
+        `Delete “${displayTitle}”?\n\n` +
+        `This permanently removes ${removeList} from this device. It cannot be undone.\n\n` +
+        'Your practice totals in Progress are kept as history.'
+    );
+    if (!confirmed) return;
+
+    try {
+        await deleteVideo(video.id);
+    } catch (error) {
+        console.error('Failed to delete video', error);
+        showToast('Could not delete that item. Please try again.');
+        return;
+    }
+
+    if (state.currentVideo && state.currentVideo.id === video.id) {
+        stopShadowPlayback();
+        state.currentVideo = null;
+        state.sentences = [];
+        state.sentenceIndex = 0;
+        state.mediaBuffer = null;
+        state.mediaBufferVideoId = null;
+        const shadowVideo = document.getElementById('shadow-video');
+        if (shadowVideo) {
+            shadowVideo.removeAttribute('src');
+            shadowVideo.load();
+        }
+    }
+    if (state.import.video && state.import.video.id === video.id) {
+        state.import.video = null;
+    }
+
+    await refreshLibrary();
+    await updateProgressDisplay();
+    showToast(`Deleted “${displayTitle}”.`);
 }
 
 /* --------------------------------------------------------------- shadowing */
