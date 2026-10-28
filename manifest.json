@@ -1,0 +1,25 @@
+{
+    "name": "Shadow",
+    "short_name": "Shadow",
+    "description": "Video shadowing app for language practice. Everything stays on your device.",
+    "start_url": "./",
+    "scope": "./",
+    "display": "standalone",
+    "background_color": "#FBFBFD",
+    "theme_color": "#FBFBFD",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "icons/icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        },
+        {
+            "src": "icons/icon-maskable.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "maskable"
+        }
+    ]
+}

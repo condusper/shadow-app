@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="theme-color" content="#FBFBFD" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+    <title>Shadow</title>
+</head>
+<body>
+    <!-- Library Screen -->
+    <section id="screen-library" class="screen active">
+        <header class="app-header">
+            <h1 class="app-title">Shadow</h1>
+        </header>
+        <main class="main-content">
+            <section class="progress-summary" aria-label="Practice summary">
+                <div class="summary-card">
+                    <div class="summary-value" id="streak-count">0</div>
+                    <div class="summary-label">Day streak</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value" id="minutes-total">0</div>
+                    <div class="summary-label">Minutes</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value" id="sentences-practiced">0</div>
+                    <div class="summary-label">Sentences</div>
+                </div>
+            </section>
+            <button id="btn-import" class="btn-import" aria-label="Import video or audio">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Import
+            </button>
+            <section class="library-list" id="library-list" aria-label="Imported videos"></section>
+        </main>
+    </section>
+
+    <!-- Import Bottom Sheet -->
+    <div id="import-sheet" class="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="import-sheet-title">
+        <div class="sheet-backdrop" id="import-sheet-backdrop"></div>
+        <div class="sheet-content">
+            <div class="sheet-handle"></div>
+            <header class="sheet-header">
+                <h2 id="import-sheet-title" class="sheet-title">Import</h2>
+                <button id="import-close" class="icon-btn" aria-label="Close">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </header>
+            <div class="sheet-steps">
+                <div class="step-indicator" aria-hidden="true">
+                    <div class="step-dot active" data-step="1"></div>
+                    <div class="step-dot" data-step="2"></div>
+                    <div class="step-dot" data-step="3"></div>
+                </div>
+
+                <!-- Step 1: Choose file -->
+                <section id="import-step-1" class="import-step active">
+                    <p class="step-description">Choose a video or audio file from your device. It stays on this device — nothing is uploaded.</p>
+                    <input type="file" id="file-input" accept="video/*,audio/*,.mp4,.mov,.webm,.m4v,.mp3,.m4a,.wav" class="file-input" aria-label="Select file">
+                    <button id="btn-select-file" class="btn-primary">Choose File</button>
+                    <div id="selected-file-info" class="file-info" hidden></div>
+                    <div id="file-error" class="status-text error-text" role="alert"></div>
+                </section>
+
+                <!-- Step 2: Transcript -->
+                <section id="import-step-2" class="import-step">
+                    <p class="step-description">Add a transcript, in order of accuracy.</p>
+                    <div class="transcript-options">
+                        <button id="btn-import-srt" class="option-card">
+                            <div class="option-title">Import subtitles</div>
+                            <div class="option-desc">.srt or .vtt — exact text and timings (preferred)</div>
+                        </button>
+                        <input type="file" id="srt-input" accept=".srt,.vtt,text/vtt,application/x-subrip" hidden>
+                        <button id="btn-paste-transcript" class="option-card">
+                            <div class="option-title">Paste transcript</div>
+                            <div class="option-desc">Add text, then mark each sentence's in/out in the editor</div>
+                        </button>
+                        <button id="btn-auto-transcribe" class="option-card" aria-describedby="auto-transcribe-note">
+                            <div class="option-title">Auto-transcribe on this device</div>
+                            <div class="option-desc">Not included in this offline build — no model is downloaded</div>
+                        </button>
+                    </div>
+                    <div id="transcript-paste-section" hidden>
+                        <textarea id="transcript-paste-area" class="textarea" rows="6" placeholder="Paste your transcript here…"></textarea>
+                        <button id="btn-confirm-paste" class="btn-secondary">Use this transcript</button>
+                    </div>
+                    <div id="transcript-status" class="status-text" role="status"></div>
+                    <div id="auto-transcribe-note" class="status-text hint-text" hidden>
+                        Auto-transcription would require downloading a Whisper model (roughly 40–150 MB) the first time.
+                        This build works fully offline and does not ship a model, so it will not pretend to transcribe.
+                        Import subtitles or paste text instead.
+                    </div>
+                </section>
+
+                <!-- Step 3: Ready -->
+                <section id="import-step-3" class="import-step">
+                    <p class="step-description" id="import-summary">Ready to review the sentences.</p>
+                    <div id="import-timing-note" class="status-text hint-text"></div>
+                    <button id="btn-open-editor" class="btn-primary">Open Sentence Editor</button>
+                </section>
+            </div>
+            <div class="sheet-footer">
+                <button id="btn-import-back" class="btn-text" hidden>Back</button>
+                <button id="btn-import-next" class="btn-primary">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sentence Editor Screen -->
+    <section id="screen-editor" class="screen">
+        <header class="screen-header">
+            <button id="btn-editor-back" class="icon-btn" aria-label="Back to library">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h2 class="screen-title">Sentence Editor</h2>
+            <button id="btn-editor-save" class="btn-text">Save</button>
+        </header>
+        <main class="editor-main">
+            <div class="editor-video-container">
+                <video id="editor-video" class="editor-video" playsinline preload="metadata"></video>
+            </div>
+            <div class="waveform-container">
+                <canvas id="waveform-canvas" class="waveform-canvas" aria-label="Audio waveform. Use Set In and Set Out to mark the selected sentence. Drag the round handles to adjust."></canvas>
+                <div id="sentence-blocks" class="sentence-blocks" aria-hidden="true"></div>
+            </div>
+            <div class="editor-selection-bar">
+                <span id="editor-selection-time" class="selection-time">No sentence selected</span>
+                <div class="timing-buttons">
+                    <button id="btn-set-in" class="btn-small">Set In <kbd>[</kbd></button>
+                    <button id="btn-set-out" class="btn-small">Set Out <kbd>]</kbd></button>
+                </div>
+            </div>
+            <div class="editor-controls">
+                <button id="btn-play-pause-editor" class="btn-icon">Play</button>
+                <div class="nudge-controls">
+                    <span class="nudge-label">Start</span>
+                    <button class="btn-small" id="btn-nudge-start-minus100">−100</button>
+                    <button class="btn-small" id="btn-nudge-start-minus10">−10</button>
+                    <button class="btn-small" id="btn-nudge-start-plus10">+10</button>
+                    <button class="btn-small" id="btn-nudge-start-plus100">+100</button>
+                    <span class="nudge-unit">ms</span>
+                </div>
+                <div class="nudge-controls">
+                    <span class="nudge-label">End</span>
+                    <button class="btn-small" id="btn-nudge-end-minus100">−100</button>
+                    <button class="btn-small" id="btn-nudge-end-minus10">−10</button>
+                    <button class="btn-small" id="btn-nudge-end-plus10">+10</button>
+                    <button class="btn-small" id="btn-nudge-end-plus100">+100</button>
+                    <span class="nudge-unit">ms</span>
+                </div>
+                <div class="editor-actions">
+                    <button id="btn-split-sentence" class="btn-secondary">Split</button>
+                    <button id="btn-merge-sentence" class="btn-secondary">Merge</button>
+                    <button id="btn-loop-sentence" class="btn-secondary">Loop</button>
+                </div>
+            </div>
+            <div class="sentence-list-editor" id="sentence-list-editor" aria-label="Sentences"></div>
+        </main>
+    </section>
+
+    <!-- Shadowing Screen -->
+    <section id="screen-shadow" class="screen">
+        <header class="screen-header">
+            <button id="btn-shadow-back" class="icon-btn" aria-label="Back to library">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h2 class="screen-title" id="shadow-title">Shadow</h2>
+            <button id="btn-shadow-settings" class="icon-btn" aria-label="Microphone, camera and calibration">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.35.4.64.72.85"></path>
+                </svg>
+            </button>
+        </header>
+        <main class="shadow-main">
+            <div id="shadow-warning" class="inline-warning" hidden>
+                <span id="shadow-warning-text">Some sentences still need timings.</span>
+                <button id="btn-open-editor-from-warning" class="btn-text">Open editor</button>
+            </div>
+            <div class="shadow-video-container">
+                <video id="shadow-video" class="shadow-video" playsinline preload="metadata"></video>
+                <video id="pip-camera" class="pip-camera" autoplay muted playsinline hidden></video>
+                <div id="camera-denied" class="camera-note" hidden>Camera unavailable. PiP stays off.</div>
+            </div>
+            <div class="shadow-progress-line" aria-hidden="true">
+                <span id="shadow-sentence-counter">—</span>
+                <span id="shadow-record-status" class="record-status"></span>
+            </div>
+            <div class="transcript-display" id="transcript-display">
+                <div id="transcript-text" class="transcript-text" aria-live="polite"></div>
+            </div>
+            <div class="transcript-toggles">
+                <button id="btn-toggle-transcript" class="toggle-btn">Hide transcript</button>
+                <button id="btn-toggle-video" class="toggle-btn">Audio only</button>
+                <button id="btn-toggle-pip" class="toggle-btn">Camera PiP</button>
+            </div>
+        </main>
+        <div class="shadow-control-bar">
+            <div class="sentence-seek-strip" id="sentence-seek-strip" aria-label="Jump to sentence"></div>
+            <div class="shadow-controls">
+                <button id="btn-prev-sentence" class="ctrl-btn" aria-label="Previous sentence">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <polygon points="19 20 9 12 19 4 19 20"></polygon>
+                        <line x1="5" y1="19" x2="5" y2="5"></line>
+                    </svg>
+                </button>
+                <button id="btn-play-pause-shadow" class="ctrl-btn ctrl-play" aria-label="Play or pause">
+                    <svg id="shadow-play-icon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                </button>
+                <button id="btn-next-sentence" class="ctrl-btn" aria-label="Next sentence">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <polygon points="5 4 15 12 5 20 5 4"></polygon>
+                        <line x1="19" y1="5" x2="19" y2="19"></line>
+                    </svg>
+                </button>
+                <button id="btn-shadow-record" class="shadow-record-btn" aria-label="Start shadowing">
+                    <div class="shadow-record-ring"></div>
+                    <span class="shadow-record-text">Shadow</span>
+                </button>
+            </div>
+            <div class="shadow-secondary-controls">
+                <button id="btn-repeat-sentence" class="ctrl-btn-small">Repeat</button>
+                <button id="btn-loop-shadow" class="ctrl-btn-small">Loop…</button>
+                <div class="speed-control">
+                    <label class="speed-label" for="speed-segmented">Speed</label>
+                    <div class="segmented" id="speed-segmented" role="group" aria-label="Playback speed">
+                        <button class="seg-btn" data-speed="0.5">0.5×</button>
+                        <button class="seg-btn" data-speed="0.75">0.75×</button>
+                        <button class="seg-btn active" data-speed="1">1×</button>
+                        <button class="seg-btn" data-speed="1.25">1.25×</button>
+                    </div>
+                </div>
+            </div>
+            <div class="shadow-mode-toggle">
+                <span class="mode-label">Mode</span>
+                <div class="segmented" id="shadow-mode-segmented" role="group" aria-label="Recording mode">
+                    <button class="seg-btn active" data-mode="sequential">Sequential</button>
+                    <button class="seg-btn" data-mode="overlap">Overlap</button>
+                </div>
+                <div id="overlap-tip" class="tip-text" hidden>Headphones strongly recommended — the microphone will hear the speaker too.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Review Panel -->
+    <div id="review-panel" class="review-panel" role="dialog" aria-modal="true" aria-labelledby="review-title">
+        <div class="review-backdrop" id="review-backdrop"></div>
+        <div class="review-content">
+            <div class="sheet-handle"></div>
+            <header class="review-header">
+                <h2 class="review-title" id="review-title">Review attempt</h2>
+                <button id="btn-close-review" class="icon-btn" aria-label="Close review">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </header>
+            <div class="review-body">
+                <div class="ab-player">
+                    <div class="ab-controls">
+                        <div class="segmented" id="ab-segmented" role="group" aria-label="Compare original and your voice">
+                            <button class="seg-btn active" data-ab="original">Original</button>
+                            <button class="seg-btn" data-ab="you">You</button>
+                        </div>
+                        <button id="btn-ab-play" class="btn-primary btn-compact">Play</button>
+                    </div>
+                    <div class="ab-meta">
+                        <span id="ab-time" class="ab-time">0:00 / 0:00</span>
+                        <button id="btn-ab-toggle" class="btn-small">Switch instantly</button>
+                    </div>
+                    <div id="ab-status" class="status-text hint-text">Switching keeps the same point in the audio.</div>
+                    <audio id="review-original-audio" class="review-audio" hidden></audio>
+                    <audio id="review-you-audio" class="review-audio" hidden></audio>
+                </div>
+
+                <div class="review-loading" id="review-loading" hidden>
+                    <div class="spinner" aria-hidden="true"></div>
+                    <span>Measuring pitch, loudness and timing…</span>
+                </div>
+
+                <div class="comparison-visuals" id="comparison-visuals">
+                    <figure class="visual-block">
+                        <figcaption>Waveform — original (top) and you (bottom)</figcaption>
+                        <canvas id="comparison-waveform" class="comparison-canvas" aria-label="Waveform comparison"></canvas>
+                    </figure>
+                    <figure class="visual-block">
+                        <figcaption>Pitch contour (intonation), in semitones around each median</figcaption>
+                        <canvas id="comparison-pitch" class="comparison-canvas" aria-label="Pitch contour comparison"></canvas>
+                    </figure>
+                    <figure class="visual-block">
+                        <figcaption>Loudness envelope (rhythm), normalised</figcaption>
+                        <canvas id="comparison-loudness" class="comparison-canvas" aria-label="Loudness comparison"></canvas>
+                    </figure>
+                </div>
+
+                <div class="feedback-section">
+                    <div class="feedback-title">What the measurements show</div>
+                    <div id="feedback-text" class="feedback-text">Analysis appears here after each attempt.</div>
+                    <div class="similarity-section" id="similarity-section" hidden>
+                        <div class="feedback-title">Similarity estimates</div>
+                        <div id="similarity-text" class="feedback-text"></div>
+                    </div>
+                    <div class="similarity-note">
+                        <strong>How to read this:</strong> numbers come from pitch and loudness contours aligned with dynamic time warping
+                        (DTW). Frame resolution is about 10–12 ms. Similarity is an <em>estimate</em>, not a grade of correctness, and
+                        absolute pitch is not compared because voices differ.
+                    </div>
+                </div>
+
+                <div class="self-rating">
+                    <div class="rating-label">How did it feel?</div>
+                    <div class="star-rating" id="star-rating" role="group" aria-label="Self rating, 1 to 3">
+                        <button class="star-btn" data-rating="1" aria-label="1 star">★</button>
+                        <button class="star-btn" data-rating="2" aria-label="2 stars">★</button>
+                        <button class="star-btn" data-rating="3" aria-label="3 stars">★</button>
+                    </div>
+                    <div id="rating-status" class="status-text hint-text">Saved on this device only.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loop Mode Bottom Sheet -->
+    <div id="loop-sheet" class="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="loop-title">
+        <div class="sheet-backdrop" id="loop-sheet-backdrop"></div>
+        <div class="sheet-content">
+            <div class="sheet-handle"></div>
+            <header class="sheet-header">
+                <h2 class="sheet-title" id="loop-title">Loop sentence</h2>
+                <button id="loop-close" class="icon-btn" aria-label="Close loop sheet">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </header>
+            <div class="loop-body">
+                <label class="loop-label" for="loop-range">Repeat times: <span id="loop-value">3</span></label>
+                <input type="range" id="loop-range" min="1" max="10" value="3" class="loop-slider">
+                <button id="btn-start-loop" class="btn-primary">Start loop</button>
+                <button id="btn-stop-loop" class="btn-secondary" hidden>Stop loop</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Screen -->
+    <section id="screen-progress" class="screen">
+        <header class="screen-header">
+            <button id="btn-progress-back" class="icon-btn" aria-label="Back to library">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h2 class="screen-title">Progress</h2>
+            <span class="header-spacer" aria-hidden="true"></span>
+        </header>
+        <main class="progress-main">
+            <div class="progress-cards">
+                <div class="progress-card">
+                    <div class="progress-card-value" id="prog-streak">0</div>
+                    <div class="progress-card-label">Day streak</div>
+                </div>
+                <div class="progress-card">
+                    <div class="progress-card-value" id="prog-minutes">0</div>
+                    <div class="progress-card-label">Minutes practiced</div>
+                </div>
+                <div class="progress-card">
+                    <div class="progress-card-value" id="prog-sentences">0</div>
+                    <div class="progress-card-label">Sentences practiced</div>
+                </div>
+            </div>
+            <section class="weekly-chart">
+                <h3 class="chart-title">Last 7 days</h3>
+                <p class="chart-subtitle" id="weekly-subtitle">Sentences practiced per day</p>
+                <div class="chart-bars" id="weekly-chart-bars" role="img" aria-label="Weekly practice chart"></div>
+            </section>
+        </main>
+    </section>
+
+    <!-- Permission/Calibration Sheet -->
+    <div id="perm-sheet" class="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="perm-title">
+        <div class="sheet-backdrop" id="perm-sheet-backdrop"></div>
+        <div class="sheet-content">
+            <div class="sheet-handle"></div>
+            <header class="sheet-header">
+                <h2 class="sheet-title" id="perm-title">Permissions & calibration</h2>
+                <button id="perm-close" class="icon-btn" aria-label="Close settings">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </header>
+            <div class="perm-body">
+                <div class="perm-section">
+                    <div class="perm-title">Microphone</div>
+                    <p class="perm-desc">Recorded with echo cancellation, noise suppression and auto gain <strong>off</strong> for an accurate raw voice.</p>
+                    <button id="btn-request-mic" class="btn-secondary">Allow microphone</button>
+                    <label class="toggle-row">
+                        <input type="checkbox" id="chk-echo-cancel">
+                        <span>Enable echo cancellation (speaker use only)</span>
+                    </label>
+                    <div id="mic-status" class="status-text hint-text"></div>
+                </div>
+                <div class="perm-section">
+                    <div class="perm-title">Camera (optional)</div>
+                    <p class="perm-desc">Front-camera picture-in-picture to compare mouth movement. Recorded and shown locally only, never uploaded. Off by default.</p>
+                    <button id="btn-request-camera" class="btn-secondary">Allow camera</button>
+                    <div id="camera-status" class="status-text hint-text"></div>
+                </div>
+                <div class="perm-section">
+                    <div class="perm-title">Latency calibration</div>
+                    <p class="perm-desc">Plays a click and records it to measure the round-trip delay between playback and your microphone. Used to make timing feedback more honest.</p>
+                    <button id="btn-calibrate" class="btn-secondary">Run calibration</button>
+                    <div id="calibration-result" class="calibration-result" role="status"></div>
+                </div>
+                <div class="perm-section">
+                    <div class="perm-title">Recording format</div>
+                    <div id="format-status" class="status-text hint-text">Checking…</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav" aria-label="Main">
+        <button class="nav-btn active" data-screen="library" aria-label="Library">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span>Library</span>
+        </button>
+        <button class="nav-btn" data-screen="progress" aria-label="Progress">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+            <span>Progress</span>
+        </button>
+    </nav>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <script src="db.js"></script>
+    <script src="audio.js"></script>
+    <script src="editor.js"></script>
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch((err) => console.warn('Service worker registration failed:', err));
+            });
+        }
+    </script>
+</body>
+</html>

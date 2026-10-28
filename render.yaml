@@ -1,0 +1,33 @@
+# Render Blueprint — Shadow is a no-build static PWA.
+#
+# Deploy: https://render.com/deploy?repo=<your repo URL>
+# Or in the dashboard: New → Static Site, leave Build Command empty,
+# Publish Directory `.`.
+services:
+  - type: web
+    name: shadow
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: ./
+    autoDeployTrigger: commit
+
+    headers:
+      # The service worker is cache-first, so every shell file must revalidate.
+      # Otherwise a browser that already installed the app can keep old code
+      # long after a deploy.
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+
+      # Microphone and camera are used locally only; nothing is uploaded.
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(self), microphone=(self)
