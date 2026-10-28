@@ -194,10 +194,46 @@
                 <span id="shadow-warning-text">Some sentences still need timings.</span>
                 <button id="btn-open-editor-from-warning" class="btn-text">Open editor</button>
             </div>
-            <div class="shadow-video-container">
-                <video id="shadow-video" class="shadow-video" playsinline preload="metadata"></video>
-                <video id="pip-camera" class="pip-camera" autoplay muted playsinline hidden></video>
-                <div id="camera-denied" class="camera-note" hidden>Camera unavailable. PiP stays off.</div>
+            <div class="video-card" id="shadow-video-card">
+                <div class="shadow-video-container" id="shadow-video-container">
+                    <video id="shadow-video" class="shadow-video" playsinline preload="metadata"></video>
+                    <video id="pip-camera" class="pip-camera" autoplay muted playsinline hidden></video>
+                    <div id="camera-denied" class="camera-note" hidden>Camera unavailable. PiP stays off.</div>
+                    <div id="video-placeholder" class="video-placeholder" hidden>
+                        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M9 18V5l12-2v13"></path>
+                            <circle cx="6" cy="18" r="3"></circle>
+                            <circle cx="18" cy="16" r="3"></circle>
+                        </svg>
+                        <span>Audio only</span>
+                    </div>
+                </div>
+                <div class="video-controls" id="video-controls" role="group" aria-label="Video controls">
+                    <input type="range" id="video-seek" class="video-seek" min="0" max="0" step="0.05" value="0" aria-label="Video position">
+                    <div class="video-control-row">
+                        <button id="btn-video-play" class="video-ctrl-btn" type="button" aria-label="Play video">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                        </button>
+                        <span class="video-time"><span id="video-current-time">0:00</span> / <span id="video-duration">0:00</span></span>
+                        <button id="btn-video-mute" class="video-ctrl-btn" type="button" aria-label="Mute video" aria-pressed="false">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                            </svg>
+                        </button>
+                        <button id="btn-video-fullscreen" class="video-ctrl-btn" type="button" aria-label="Enter fullscreen">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+                                <path d="M21 8V5a2 2 0 0 0-2-2h-3"></path>
+                                <path d="M3 16v3a2 2 0 0 0 2 2h3"></path>
+                                <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="shadow-progress-line" aria-hidden="true">
                 <span id="shadow-sentence-counter">—</span>
@@ -213,7 +249,22 @@
             </div>
         </main>
         <div class="shadow-control-bar">
-            <div class="sentence-seek-strip" id="sentence-seek-strip" aria-label="Jump to sentence"></div>
+            <div class="shadow-seek-row">
+                <div class="sentence-seek-strip" id="sentence-seek-strip" aria-label="Jump to sentence"></div>
+                <button id="btn-shadow-options" class="shadow-options-toggle" type="button" aria-label="Shadowing options" aria-expanded="false" aria-controls="shadow-options-panel" title="Shadowing options">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="4" y1="21" x2="4" y2="14"></line>
+                        <line x1="4" y1="10" x2="4" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12" y2="3"></line>
+                        <line x1="20" y1="21" x2="20" y2="16"></line>
+                        <line x1="20" y1="12" x2="20" y2="3"></line>
+                        <line x1="1" y1="14" x2="7" y2="14"></line>
+                        <line x1="9" y1="8" x2="15" y2="8"></line>
+                        <line x1="17" y1="16" x2="23" y2="16"></line>
+                    </svg>
+                </button>
+            </div>
             <div class="shadow-controls">
                 <button id="btn-prev-sentence" class="ctrl-btn" aria-label="Previous sentence">
                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -237,26 +288,28 @@
                     <span class="shadow-record-text">Shadow</span>
                 </button>
             </div>
-            <div class="shadow-secondary-controls">
-                <button id="btn-repeat-sentence" class="ctrl-btn-small">Repeat</button>
-                <button id="btn-loop-shadow" class="ctrl-btn-small">Loop…</button>
-                <div class="speed-control">
-                    <label class="speed-label" for="speed-segmented">Speed</label>
-                    <div class="segmented" id="speed-segmented" role="group" aria-label="Playback speed">
-                        <button class="seg-btn" data-speed="0.5">0.5×</button>
-                        <button class="seg-btn" data-speed="0.75">0.75×</button>
-                        <button class="seg-btn active" data-speed="1">1×</button>
-                        <button class="seg-btn" data-speed="1.25">1.25×</button>
+            <div class="shadow-options-panel" id="shadow-options-panel" hidden>
+                <div class="shadow-secondary-controls">
+                    <button id="btn-repeat-sentence" class="ctrl-btn-small">Repeat</button>
+                    <button id="btn-loop-shadow" class="ctrl-btn-small">Loop…</button>
+                    <div class="speed-control">
+                        <label class="speed-label" for="speed-segmented">Speed</label>
+                        <div class="segmented" id="speed-segmented" role="group" aria-label="Playback speed">
+                            <button class="seg-btn" data-speed="0.5">0.5×</button>
+                            <button class="seg-btn" data-speed="0.75">0.75×</button>
+                            <button class="seg-btn active" data-speed="1">1×</button>
+                            <button class="seg-btn" data-speed="1.25">1.25×</button>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="shadow-mode-toggle">
-                <span class="mode-label">Mode</span>
-                <div class="segmented" id="shadow-mode-segmented" role="group" aria-label="Recording mode">
-                    <button class="seg-btn active" data-mode="sequential">Sequential</button>
-                    <button class="seg-btn" data-mode="overlap">Overlap</button>
+                <div class="shadow-mode-toggle">
+                    <span class="mode-label">Mode</span>
+                    <div class="segmented" id="shadow-mode-segmented" role="group" aria-label="Recording mode">
+                        <button class="seg-btn active" data-mode="sequential">Sequential</button>
+                        <button class="seg-btn" data-mode="overlap">Overlap</button>
+                    </div>
+                    <div id="overlap-tip" class="tip-text" hidden>Headphones strongly recommended — the microphone will hear the speaker too.</div>
                 </div>
-                <div id="overlap-tip" class="tip-text" hidden>Headphones strongly recommended — the microphone will hear the speaker too.</div>
             </div>
         </div>
     </section>

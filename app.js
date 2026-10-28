@@ -26,6 +26,7 @@ const state = {
     recordingMeta: null,
     attemptId: null,
     rating: 0,
+    freePlayback: false,
     import: {
         file: null,
         video: null,
@@ -736,6 +737,15 @@ function setupShadowing() {
         playCurrentSentence();
     });
 
+    document.getElementById('btn-shadow-options').addEventListener('click', () => {
+        const panel = document.getElementById('shadow-options-panel');
+        const button = document.getElementById('btn-shadow-options');
+        const open = panel.hidden;
+        panel.hidden = !open;
+        button.setAttribute('aria-expanded', String(open));
+        requestAnimationFrame(syncShadowControlPadding);
+    });
+
     document.getElementById('btn-loop-shadow').addEventListener('click', () => {
         if (state.recording) {
             showToast('Stop the recording before starting a loop.');
@@ -791,6 +801,7 @@ function setupShadowing() {
         state.hideVideo = !state.hideVideo;
         const video = document.getElementById('shadow-video');
         video.hidden = state.hideVideo;
+        document.getElementById('video-placeholder').hidden = !state.hideVideo;
         document.getElementById('btn-toggle-video').textContent = state.hideVideo ? 'Show video' : 'Audio only';
         if (state.hideVideo) document.getElementById('pip-camera').hidden = true;
     });
@@ -801,16 +812,45 @@ function setupShadowing() {
         document.getElementById('perm-sheet').classList.add('active');
     });
 
-    document.getElementById('shadow-video').addEventListener('play', () => {
+    const video = document.getElementById('shadow-video');
+    video.addEventListener('play', () => {
         setPlayIcon(true);
+        setVideoPlayIcon(true);
+        startVideoUiTicker();
         armFrameWatcher();
-        if (state.stopAt == null) {
+        if (!state.freePlayback && state.stopAt == null) {
             const sentence = currentSentence();
             if (hasTiming(sentence)) state.stopAt = sentence.end;
         }
     });
-    document.getElementById('shadow-video').addEventListener('pause', () => setPlayIcon(false));
-    document.getElementById('shadow-video').addEventListener('timeupdate', updateHighlightFromPlayback);
+    video.addEventListener('pause', () => {
+        setPlayIcon(false);
+        setVideoPlayIcon(false);
+        stopVideoUiTicker();
+        updateVideoTimeUI();
+    });
+    video.addEventListener('timeupdate', () => {
+        if (state.freePlayback) syncSentenceToTime(video.currentTime);
+        updateHighlightFromPlayback();
+    });
+    video.addEventListener('loadedmetadata', updateVideoTimeUI);
+    video.addEventListener('durationchange', updateVideoTimeUI);
+    video.addEventListener('volumechange', updateMuteButton);
+
+    document.getElementById('btn-video-play').addEventListener('click', toggleVideoPlayback);
+    document.getElementById('btn-video-mute').addEventListener('click', toggleVideoMute);
+    document.getElementById('btn-video-fullscreen').addEventListener('click', toggleVideoFullscreen);
+
+    const seek = document.getElementById('video-seek');
+    seek.addEventListener('pointerdown', beginVideoSeek);
+    seek.addEventListener('pointerup', finishVideoSeek);
+    seek.addEventListener('pointercancel', finishVideoSeek);
+    seek.addEventListener('input', handleVideoSeekInput);
+    seek.addEventListener('change', finishVideoSeek);
+    seek.addEventListener('keyup', finishVideoSeek);
+    seek.addEventListener('blur', finishVideoSeek);
+    document.addEventListener('fullscreenchange', updateFullscreenButton);
+    updateMuteButton();
 
     // The control bar is fixed, so reserve exactly as much room as it needs.
     // Its height changes when controls wrap or the overlap tip appears.
@@ -885,6 +925,10 @@ async function initShadowing() {
     updateSentenceCounter();
     updateShadowStatus('');
     setPlayIcon(false);
+    setVideoPlayIcon(false);
+    updateVideoTimeUI();
+    updateMuteButton();
+    state.freePlayback = false;
     state.stopAt = null;
     state.onSentenceEnd = null;
     requestAnimationFrame(syncShadowControlPadding);
@@ -963,6 +1007,218 @@ function setPlayIcon(isPlaying) {
     document.getElementById('btn-play-pause-shadow').setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
 }
 
+/* ------------------------------------------------------------ video controls */
+
+let videoUiFrame = null;
+let videoSeekActive = false;
+let videoSeekWasPlaying = false;
+
+function setVideoPlayIcon(isPlaying) {
+    const button = document.getElementById('btn-video-play');
+    if (!button) return;
+    button.innerHTML = isPlaying
+        ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>'
+        : '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+    button.setAttribute('aria-label', isPlaying ? 'Pause video' : 'Play video');
+}
+
+function formatVideoClock(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+    const total = Math.floor(seconds);
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+    return `${minutes}:${String(secs).padStart(2, '0')}`;
+}
+
+function updateVideoTimeUI() {
+    const video = document.getElementById('shadow-video');
+    const seek = document.getElementById('video-seek');
+    if (!video || !seek) return;
+    const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+    const current = Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0;
+    seek.max = String(duration);
+    if (!videoSeekActive) {
+        seek.value = String(duration > 0 ? Math.min(current, duration) : 0);
+    }
+    const pct = duration > 0 ? Math.min(100, Math.max(0, (current / duration) * 100)) : 0;
+    seek.style.setProperty('--seek-progress', pct.toFixed(2) + '%');
+    document.getElementById('video-current-time').textContent = formatVideoClock(current);
+    document.getElementById('video-duration').textContent = formatVideoClock(duration);
+}
+
+function startVideoUiTicker() {
+    stopVideoUiTicker();
+    const tick = () => {
+        videoUiFrame = null;
+        const video = document.getElementById('shadow-video');
+        if (!video || video.paused) return;
+        if (state.freePlayback) syncSentenceToTime(video.currentTime);
+        updateVideoTimeUI();
+        videoUiFrame = requestAnimationFrame(tick);
+    };
+    videoUiFrame = requestAnimationFrame(tick);
+}
+
+function stopVideoUiTicker() {
+    if (videoUiFrame) {
+        cancelAnimationFrame(videoUiFrame);
+        videoUiFrame = null;
+    }
+}
+
+/** Move the active sentence to whichever timed sentence contains `time`. */
+function syncSentenceToTime(time) {
+    const index = state.sentences.findIndex((sentence) =>
+        hasTiming(sentence) && time >= sentence.start && time < sentence.end);
+    if (index >= 0 && index !== state.sentenceIndex) {
+        state.sentenceIndex = index;
+        renderTranscript();
+        renderSeekStrip();
+        updateSentenceCounter();
+    }
+    updateWordHighlight(time);
+}
+
+function toggleVideoPlayback() {
+    const video = document.getElementById('shadow-video');
+    if (!video) return;
+    if (state.recording) {
+        showToast('Stop the recording before using video playback.');
+        return;
+    }
+    if (!video.paused) {
+        video.pause();
+        state.stopAt = null;
+        state.onSentenceEnd = null;
+        return;
+    }
+    startFreePlayback();
+}
+
+function startFreePlayback() {
+    const video = document.getElementById('shadow-video');
+    if (!video) return;
+    if (state.recording) {
+        showToast('Stop the recording before using video playback.');
+        return;
+    }
+    if (state.loopActive) stopShadowLoop(true);
+    state.freePlayback = true;
+    state.stopAt = null;
+    state.onSentenceEnd = null;
+
+    let restarted = false;
+    if (video.ended || (Number.isFinite(video.duration) && video.duration > 0 && video.currentTime >= video.duration - 0.05)) {
+        video.currentTime = 0;
+        restarted = true;
+    }
+    if (restarted) {
+        const firstTimed = state.sentences.findIndex(hasTiming);
+        if (firstTimed >= 0) {
+            state.sentenceIndex = firstTimed;
+            renderTranscript();
+            renderSeekStrip();
+            updateSentenceCounter();
+        }
+    }
+    syncSentenceToTime(video.currentTime);
+    video.playbackRate = state.playbackRate;
+    video.preservesPitch = true;
+    video.play().catch(() => showToast('Playback was blocked. Tap play again.'));
+}
+
+function toggleVideoMute() {
+    const video = document.getElementById('shadow-video');
+    if (!video) return;
+    video.muted = !video.muted;
+    updateMuteButton();
+}
+
+function updateMuteButton() {
+    const video = document.getElementById('shadow-video');
+    const button = document.getElementById('btn-video-mute');
+    if (!video || !button) return;
+    const muted = video.muted || video.volume === 0;
+    button.innerHTML = muted
+        ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>'
+        : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>';
+    button.setAttribute('aria-label', muted ? 'Unmute video' : 'Mute video');
+    button.setAttribute('aria-pressed', muted ? 'true' : 'false');
+}
+
+function toggleVideoFullscreen() {
+    const card = document.getElementById('shadow-video-card');
+    const video = document.getElementById('shadow-video');
+    if (!card || !video) return;
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+        return;
+    }
+    if (typeof card.requestFullscreen === 'function') {
+        card.requestFullscreen().catch(() => showToast('Fullscreen is not available in this browser.'));
+    } else if (typeof video.webkitEnterFullscreen === 'function') {
+        video.webkitEnterFullscreen();
+    } else {
+        showToast('Fullscreen is not available in this browser.');
+    }
+}
+
+function updateFullscreenButton() {
+    const button = document.getElementById('btn-video-fullscreen');
+    if (!button) return;
+    const active = !!document.fullscreenElement;
+    button.setAttribute('aria-label', active ? 'Exit fullscreen' : 'Enter fullscreen');
+    button.innerHTML = active
+        ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3"></path><path d="M21 8h-3a2 2 0 0 1-2-2V3"></path><path d="M3 16h3a2 2 0 0 1 2 2v3"></path><path d="M16 21v-3a2 2 0 0 1 2-2h3"></path></svg>'
+        : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"></path><path d="M21 8V5a2 2 0 0 0-2-2h-3"></path><path d="M3 16v3a2 2 0 0 0 2 2h3"></path><path d="M16 21h3a2 2 0 0 0 2-2v-3"></path></svg>';
+}
+
+function beginVideoSeek() {
+    if (state.recording) return;
+    const video = document.getElementById('shadow-video');
+    if (!video) return;
+    if (!videoSeekActive) {
+        videoSeekWasPlaying = !video.paused;
+        videoSeekActive = true;
+        video.pause();
+    }
+    state.freePlayback = false;
+    state.stopAt = null;
+    state.onSentenceEnd = null;
+}
+
+function handleVideoSeekInput() {
+    if (state.recording) return;
+    if (!videoSeekActive) beginVideoSeek();
+    const video = document.getElementById('shadow-video');
+    const seek = document.getElementById('video-seek');
+    if (!video || !seek) return;
+    const rawTime = Number(seek.value);
+    const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+    const time = Math.max(0, duration > 0 ? Math.min(rawTime, duration) : rawTime);
+    if (!Number.isFinite(time)) return;
+    video.currentTime = time;
+    updateVideoTimeUI();
+    syncSentenceToTime(time);
+}
+
+function finishVideoSeek() {
+    if (state.recording) {
+        videoSeekActive = false;
+        videoSeekWasPlaying = false;
+        return;
+    }
+    videoSeekActive = false;
+    const shouldResume = videoSeekWasPlaying;
+    videoSeekWasPlaying = false;
+    updateVideoTimeUI();
+    if (shouldResume) startFreePlayback();
+}
+
 function navigateSentence(delta, autoplay) {
     if (!state.sentences.length) return;
     if (state.recording) {
@@ -971,6 +1227,7 @@ function navigateSentence(delta, autoplay) {
     }
     const next = Math.max(0, Math.min(state.sentences.length - 1, state.sentenceIndex + delta));
     state.sentenceIndex = next;
+    state.freePlayback = false;
     const sentence = currentSentence();
     const video = document.getElementById('shadow-video');
 
@@ -1002,6 +1259,7 @@ function playCurrentSentence() {
     const video = document.getElementById('shadow-video');
     video.playbackRate = state.playbackRate;
     video.preservesPitch = true;
+    state.freePlayback = false;
     video.currentTime = sentence.start;
     state.stopAt = sentence.end;
     state.onSentenceEnd = null;
@@ -1011,6 +1269,7 @@ function playCurrentSentence() {
 function stopShadowPlayback() {
     const video = document.getElementById('shadow-video');
     if (video) video.pause();
+    state.freePlayback = false;
     state.stopAt = null;
     state.onSentenceEnd = null;
     state.pendingShadow = false;
@@ -1157,6 +1416,9 @@ async function toggleShadowRecording() {
     }
     if (!state.currentVideo) return;
     stopShadowLoop(false);
+    state.freePlayback = false;
+    const activeVideo = document.getElementById('shadow-video');
+    if (activeVideo && !activeVideo.paused) activeVideo.pause();
 
     const button = document.getElementById('btn-shadow-record');
     button.disabled = true;
@@ -1226,6 +1488,10 @@ function setRecordingUI(isRecording) {
     button.classList.toggle('recording', isRecording);
     button.querySelector('.shadow-record-text').textContent = isRecording ? 'Stop' : 'Shadow';
     button.setAttribute('aria-label', isRecording ? 'Stop recording' : 'Start shadowing');
+    const videoPlay = document.getElementById('btn-video-play');
+    const videoSeek = document.getElementById('video-seek');
+    if (videoPlay) videoPlay.disabled = isRecording;
+    if (videoSeek) videoSeek.disabled = isRecording;
     if (!isRecording) {
         stopRecordLevelIndicator();
         updateShadowStatus('');
@@ -1372,6 +1638,7 @@ function startShadowLoop(count) {
         return;
     }
     stopShadowLoop(false);
+    state.freePlayback = false;
     state.loopActive = true;
     state.loopTotal = count;
     state.loopRemaining = count;

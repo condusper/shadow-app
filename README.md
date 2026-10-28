@@ -59,7 +59,7 @@ git push -u origin main
 ## Updating a deployed build
 
 Browsers keep the installed service worker until `sw.js` changes. Bump
-`CACHE_NAME` in `sw.js` (for example `shadow-app-v4` → `shadow-app-v5`)
+`CACHE_NAME` in `sw.js` (for example `shadow-app-v5` → `shadow-app-v6`)
 whenever you ship changes to the shell files, then commit and push.
 
 ## Notes
