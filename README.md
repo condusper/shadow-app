@@ -24,25 +24,30 @@ Open http://localhost:3000.
 
 Shadow is a static site, so it deploys from any Git repo with no build step.
 
-### Option A — Blueprint (recommended)
+### Option A — Blueprint (recommended, enables auto-deploy)
 
-1. Push this folder to GitHub (see below).
-2. Open `https://render.com/deploy?repo=<your repo URL>`.
-3. Approve the Blueprint. `render.yaml` sets the publish directory, cache
-   headers, and permissions policy.
+1. Push this folder to GitHub (already done if you see this in the repo).
+2. In Render: **New → Blueprint**, connect GitHub, and pick the repo.
+   (Connecting GitHub also enables auto-deploy on every push.)
+3. Approve. `render.yaml` sets the publish directory, cache headers, and
+   permissions policy.
 
-### Option B — Dashboard
+Blueprint link: `https://render.com/deploy?repo=<your repo URL>`
 
-New → Static Site → connect the repo, then:
+### Option B — Static Site from a public repo (no GitHub app)
+
+New → Static Site → **Public Git repository** → paste the repo URL:
 
 | Setting | Value |
 | --- | --- |
+| Branch | `main` |
 | Build Command | *(leave empty)* |
 | Publish Directory | `.` |
 
-Add the cache header manually under **Headers**:
-`/*` → `Cache-Control: no-cache`. This matters: `sw.js` is cache-first, and a
-stale service worker would keep serving the old build.
+Then add the header manually under **Headers**: `/*` → `Cache-Control:
+no-cache`. This matters: `sw.js` is cache-first, and a stale service worker
+would keep serving the old build. Public-repo services must be redeployed
+manually (no auto-deploy).
 
 ### Push to GitHub
 
